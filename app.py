@@ -10,11 +10,13 @@ app = Flask(__name__)
 # 🔐 Webhook verify token
 VERIFY_TOKEN = "aryanstore"
 
-# 📞 OWNER WHATSAPP NUMBER (YOU)
+# 📞 OWNER WHATSAPP NUMBER
 OWNER_NUMBER = "917876772622"
 
 # 🔑 WHATSAPP CLOUD API DETAILS
+# (Hardcoded for now – later we’ll move to env variables)
 ACCESS_TOKEN = "EAAcawvprIgwBQiJw988wMwc3HC4iahoGG0eyLKIt59x8BUNl7P4htg5Ia2UW6Egdl9CytrDzGx1wjmOj1rokDZCot49w3xFyCi5ZArypJLzoaKZCQpgnCF7lqsKbkbQSazSdF5IxmSAX4TcmPt4cZCK7wij3gBXBU4UcMv3G2a9e6eNFTer9qQUwgGto5IQetsIIkf3CAtEWGQwtnpWx9W9bugPAJXlDvZByAqZAXF1BTv7TRZBOuyL2Xe2KN2cBFTHyYWQlqcc3kgRsDXYwc4i"
+
 PHONE_NUMBER_ID = "952800504590356"
 
 
@@ -31,7 +33,6 @@ def create_pdf(order_no, items_text):
     width, height = A4
     y = height - 40
 
-    # Header
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(width / 2, y, "ARYAN STORE")
     y -= 30
@@ -39,14 +40,9 @@ def create_pdf(order_no, items_text):
     c.setFont("Helvetica", 11)
     c.drawString(40, y, f"Order No: {order_no}")
     y -= 15
-    c.drawString(
-        40,
-        y,
-        f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}"
-    )
+    c.drawString(40, y, f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}")
     y -= 25
 
-    # Table header
     c.setFont("Helvetica-Bold", 11)
     c.drawString(40, y, "Item")
     c.drawString(400, y, "Amount")
@@ -54,7 +50,6 @@ def create_pdf(order_no, items_text):
     c.line(40, y, 550, y)
     y -= 18
 
-    # Items
     c.setFont("Helvetica", 11)
     for line in items_text.split("\n"):
         if y < 60:
@@ -74,17 +69,12 @@ def create_pdf(order_no, items_text):
 
 def send_pdf_on_whatsapp(pdf_path, caption):
     try:
-        # 1️⃣ Upload PDF
+        print("🚀 STEP 5: UPLOADING PDF", flush=True)
+
         upload_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
+        headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}"
-        }
-
-        files = {
-            "file": open(pdf_path, "rb")
-        }
-
+        files = {"file": open(pdf_path, "rb")}
         data = {
             "messaging_product": "whatsapp",
             "type": "application/pdf"
@@ -97,16 +87,17 @@ def send_pdf_on_whatsapp(pdf_path, caption):
             data=data
         )
 
-        print("MEDIA UPLOAD RESPONSE:", upload_response.text)
+        print("MEDIA UPLOAD RESPONSE:", upload_response.text, flush=True)
 
         upload_json = upload_response.json()
         media_id = upload_json.get("id")
 
         if not media_id:
-            print("❌ MEDIA ID NOT RECEIVED")
+            print("❌ MEDIA ID NOT RECEIVED – STOPPING", flush=True)
             return
 
-        # 2️⃣ Send PDF to owner
+        print("✅ MEDIA ID:", media_id, flush=True)
+
         message_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
         payload = {
@@ -128,10 +119,10 @@ def send_pdf_on_whatsapp(pdf_path, caption):
             json=payload
         )
 
-        print("SEND MESSAGE RESPONSE:", send_response.text)
+        print("SEND MESSAGE RESPONSE:", send_response.text, flush=True)
 
     except Exception as e:
-        print("❌ SEND PDF ERROR:", e)
+        print("❌ SEND PDF ERROR:", e, flush=True)
 
 
 # -------------------- ROUTES --------------------
@@ -144,7 +135,6 @@ def home():
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
 
-    # 🔹 Webhook verification
     if request.method == "GET":
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
@@ -154,10 +144,11 @@ def webhook():
             return challenge, 200
         return "Verification failed", 403
 
-    # 🔹 Incoming WhatsApp message
     if request.method == "POST":
+        print("🔥 POST RECEIVED FROM META", flush=True)
+
         data = request.json
-        print("WEBHOOK RECEIVED:", data)
+        print(data, flush=True)
 
         try:
             entry = data["entry"][0]
@@ -169,14 +160,14 @@ def webhook():
                 msg = messages[0]
                 items_text = msg["text"]["body"]
 
-                print("ITEMS RECEIVED:")
-                print(items_text)
+                print("📦 ITEMS RECEIVED:", flush=True)
+                print(items_text, flush=True)
 
                 order_no = generate_order_number()
-                print("ORDER NO:", order_no)
+                print("🧾 ORDER NO:", order_no, flush=True)
 
                 pdf_path = create_pdf(order_no, items_text)
-                print("PDF CREATED:", pdf_path)
+                print("📄 PDF CREATED:", pdf_path, flush=True)
 
                 send_pdf_on_whatsapp(
                     pdf_path,
@@ -184,7 +175,7 @@ def webhook():
                 )
 
         except Exception as e:
-            print("❌ ERROR IN WEBHOOK:", e)
+            print("❌ ERROR IN WEBHOOK:", e, flush=True)
 
         return "EVENT_RECEIVED", 200
 
