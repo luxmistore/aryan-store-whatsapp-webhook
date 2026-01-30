@@ -7,15 +7,12 @@ from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 
-# 🔐 Webhook verify token
 VERIFY_TOKEN = "aryanstore"
 
-# 📞 OWNER WHATSAPP NUMBER
 OWNER_NUMBER = "917876772622"
 
-# 🔑 WHATSAPP CLOUD API DETAILS
-ACCESS_TOKEN = "EAAcawvprIgwBQiJw988wMwc3HC4iahoGG0eyLKIt59x8BUNl7P4htg5Ia2UW6Egdl9CytrDzGx1wjmOj1rokDZCot49w3xFyCi5ZArypJLzoaKZCQpgnCF7lqsKbkbQSazSdF5IxmSAX4TcmPt4cZCK7wij3gBXBU4UcMv3G2a9e6eNFTer9qQUwgGto5IQetsIIkf3CAtEWGQwtnpWx9W9bugPAJXlDvZByAqZAXF1BTv7TRZBOuyL2Xe2KN2cBFTHyYWQlqcc3kgRsDXYwc4i"
-
+# ⚠️ For safety, move this to env later
+ACCESS_TOKEN = "EAAcawvprIgwBQl5LDdDoaydqaWMX9F61LgWUeXXth1pkRNvCEtgTYhHQDteJGi8PNVhxtUomuZAkfd2MCRGxSQZAhJVGsZBrtWNjNZBGAJAZAWX2EbkWKoXVnq67dXyyNyOLYB8KMeA8aOZAQLZB9m7TgubZBCzVBl2u7EgOKdllySaPm2dJLJD5orQfCBX7SRqzD29Arjr8zOLW8PGYW5yNOZAA52SOpNXreNP7W64os0K9SVqZA3CRSS3TZC0V8GGES7KlrTr8VJKt4s4Xl2QukfNwwZDZD"
 PHONE_NUMBER_ID = "952800504590356"
 
 
@@ -78,21 +75,25 @@ def send_pdf_on_whatsapp(pdf_path, caption):
             "Authorization": f"Bearer {ACCESS_TOKEN}"
         }
 
-        # ✅ FINAL FIX — everything as multipart
+        # ✅ THIS IS THE KEY FIX
         files = {
             "file": (
-                "order.pdf",
+                os.path.basename(pdf_path),  # must end with .pdf
                 open(pdf_path, "rb"),
                 "application/pdf"
-            ),
-            "messaging_product": (None, "whatsapp"),
-            "type": (None, "application/pdf")
+            )
+        }
+
+        data = {
+            "messaging_product": "whatsapp",
+            "type": "application/pdf"
         }
 
         upload_response = requests.post(
             upload_url,
             headers=headers,
-            files=files
+            files=files,
+            data=data
         )
 
         print("MEDIA UPLOAD RESPONSE:", upload_response.text, flush=True)
@@ -101,10 +102,8 @@ def send_pdf_on_whatsapp(pdf_path, caption):
         media_id = upload_json.get("id")
 
         if not media_id:
-            print("❌ MEDIA ID NOT RECEIVED – STOPPING", flush=True)
+            print("❌ MEDIA ID NOT RECEIVED", flush=True)
             return
-
-        print("✅ MEDIA ID RECEIVED:", media_id, flush=True)
 
         message_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
@@ -159,23 +158,13 @@ def webhook():
         print(data, flush=True)
 
         try:
-            entry = data["entry"][0]
-            changes = entry["changes"][0]
-            value = changes["value"]
-            messages = value.get("messages")
+            messages = data["entry"][0]["changes"][0]["value"].get("messages")
 
             if messages:
-                msg = messages[0]
-                items_text = msg["text"]["body"]
-
-                print("📦 ITEMS RECEIVED:", flush=True)
-                print(items_text, flush=True)
+                items_text = messages[0]["text"]["body"]
 
                 order_no = generate_order_number()
-                print("🧾 ORDER NO:", order_no, flush=True)
-
                 pdf_path = create_pdf(order_no, items_text)
-                print("📄 PDF CREATED:", pdf_path, flush=True)
 
                 send_pdf_on_whatsapp(
                     pdf_path,
