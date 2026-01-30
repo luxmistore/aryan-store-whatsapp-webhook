@@ -7,26 +7,28 @@ from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 
+# 🔐 Webhook verify token
 VERIFY_TOKEN = "aryanstore"
 
-# 🔹 OWNER WHATSAPP NUMBER (YOU)
+# 📞 OWNER WHATSAPP NUMBER (YOU)
 OWNER_NUMBER = "917876772622"
 
-# 🔹 WHATSAPP API DETAILS (FILL THESE)
+# 🔑 WHATSAPP CLOUD API DETAILS
 ACCESS_TOKEN = "EAAcawvprIgwBQiJw988wMwc3HC4iahoGG0eyLKIt59x8BUNl7P4htg5Ia2UW6Egdl9CytrDzGx1wjmOj1rokDZCot49w3xFyCi5ZArypJLzoaKZCQpgnCF7lqsKbkbQSazSdF5IxmSAX4TcmPt4cZCK7wij3gBXBU4UcMv3G2a9e6eNFTer9qQUwgGto5IQetsIIkf3CAtEWGQwtnpWx9W9bugPAJXlDvZByAqZAXF1BTv7TRZBOuyL2Xe2KN2cBFTHyYWQlqcc3kgRsDXYwc4i"
 PHONE_NUMBER_ID = "952800504590356"
 
+
+# -------------------- UTILITIES --------------------
+
 def generate_order_number():
-    today = datetime.datetime.now().strftime("%Y%m%d")
-    time_part = datetime.datetime.now().strftime("%H%M%S")
-    return f"ARY-{today}-{time_part}"
+    return "ARY-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
 
 def create_pdf(order_no, items_text):
-    filename = f"/tmp/{order_no}.pdf"
+    file_path = f"/tmp/{order_no}.pdf"
 
-    c = canvas.Canvas(filename, pagesize=A4)
+    c = canvas.Canvas(file_path, pagesize=A4)
     width, height = A4
-
     y = height - 40
 
     # Header
@@ -37,7 +39,11 @@ def create_pdf(order_no, items_text):
     c.setFont("Helvetica", 11)
     c.drawString(40, y, f"Order No: {order_no}")
     y -= 15
-    c.drawString(40, y, f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}")
+    c.drawString(
+        40,
+        y,
+        f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}"
+    )
     y -= 25
 
     # Table header
@@ -46,7 +52,7 @@ def create_pdf(order_no, items_text):
     c.drawString(400, y, "Amount")
     y -= 10
     c.line(40, y, 550, y)
-    y -= 15
+    y -= 18
 
     # Items
     c.setFont("Helvetica", 11)
@@ -63,51 +69,82 @@ def create_pdf(order_no, items_text):
     c.drawString(40, y, "Total Amount: __________________")
 
     c.save()
-    return filename
+    return file_path
+
 
 def send_pdf_on_whatsapp(pdf_path, caption):
-    # Upload media
-    upload_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}"
-    }
-    files = {
-        "file": open(pdf_path, "rb"),
-        "type": (None, "application/pdf"),
-        "messaging_product": (None, "whatsapp")
-    }
+    try:
+        # 1️⃣ Upload PDF
+        upload_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
 
-    upload_response = requests.post(upload_url, headers=headers, files=files)
-    media_id = upload_response.json().get("id")
-
-    # Send document
-    message_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": OWNER_NUMBER,
-        "type": "document",
-        "document": {
-            "id": media_id,
-            "caption": caption
+        headers = {
+            "Authorization": f"Bearer {ACCESS_TOKEN}"
         }
-    }
 
-    requests.post(
-        message_url,
-        headers={
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        },
-        json=payload
-    )
+        files = {
+            "file": open(pdf_path, "rb")
+        }
+
+        data = {
+            "messaging_product": "whatsapp",
+            "type": "application/pdf"
+        }
+
+        upload_response = requests.post(
+            upload_url,
+            headers=headers,
+            files=files,
+            data=data
+        )
+
+        print("MEDIA UPLOAD RESPONSE:", upload_response.text)
+
+        upload_json = upload_response.json()
+        media_id = upload_json.get("id")
+
+        if not media_id:
+            print("❌ MEDIA ID NOT RECEIVED")
+            return
+
+        # 2️⃣ Send PDF to owner
+        message_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": OWNER_NUMBER,
+            "type": "document",
+            "document": {
+                "id": media_id,
+                "caption": caption
+            }
+        }
+
+        send_response = requests.post(
+            message_url,
+            headers={
+                "Authorization": f"Bearer {ACCESS_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json=payload
+        )
+
+        print("SEND MESSAGE RESPONSE:", send_response.text)
+
+    except Exception as e:
+        print("❌ SEND PDF ERROR:", e)
+
+
+# -------------------- ROUTES --------------------
 
 @app.route("/", methods=["GET"])
 def home():
     return "Aryan Store Webhook Running"
 
+
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
 
+    # 🔹 Webhook verification
     if request.method == "GET":
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
@@ -117,8 +154,10 @@ def webhook():
             return challenge, 200
         return "Verification failed", 403
 
+    # 🔹 Incoming WhatsApp message
     if request.method == "POST":
         data = request.json
+        print("WEBHOOK RECEIVED:", data)
 
         try:
             entry = data["entry"][0]
@@ -130,8 +169,14 @@ def webhook():
                 msg = messages[0]
                 items_text = msg["text"]["body"]
 
+                print("ITEMS RECEIVED:")
+                print(items_text)
+
                 order_no = generate_order_number()
+                print("ORDER NO:", order_no)
+
                 pdf_path = create_pdf(order_no, items_text)
+                print("PDF CREATED:", pdf_path)
 
                 send_pdf_on_whatsapp(
                     pdf_path,
@@ -139,10 +184,12 @@ def webhook():
                 )
 
         except Exception as e:
-            print("ERROR:", e)
+            print("❌ ERROR IN WEBHOOK:", e)
 
         return "EVENT_RECEIVED", 200
 
+
+# -------------------- MAIN --------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
