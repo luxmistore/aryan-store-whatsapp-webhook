@@ -14,7 +14,6 @@ VERIFY_TOKEN = "aryanstore"
 OWNER_NUMBER = "917876772622"
 
 # 🔑 WHATSAPP CLOUD API DETAILS
-# (Hardcoded for now – later we’ll move to env variables)
 ACCESS_TOKEN = "EAAcawvprIgwBQiJw988wMwc3HC4iahoGG0eyLKIt59x8BUNl7P4htg5Ia2UW6Egdl9CytrDzGx1wjmOj1rokDZCot49w3xFyCi5ZArypJLzoaKZCQpgnCF7lqsKbkbQSazSdF5IxmSAX4TcmPt4cZCK7wij3gBXBU4UcMv3G2a9e6eNFTer9qQUwgGto5IQetsIIkf3CAtEWGQwtnpWx9W9bugPAJXlDvZByAqZAXF1BTv7TRZBOuyL2Xe2KN2cBFTHyYWQlqcc3kgRsDXYwc4i"
 
 PHONE_NUMBER_ID = "952800504590356"
@@ -40,7 +39,10 @@ def create_pdf(order_no, items_text):
     c.setFont("Helvetica", 11)
     c.drawString(40, y, f"Order No: {order_no}")
     y -= 15
-    c.drawString(40, y, f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}")
+    c.drawString(
+        40, y,
+        f"Date: {datetime.datetime.now().strftime('%d-%m-%Y %I:%M %p')}"
+    )
     y -= 25
 
     c.setFont("Helvetica-Bold", 11)
@@ -69,12 +71,22 @@ def create_pdf(order_no, items_text):
 
 def send_pdf_on_whatsapp(pdf_path, caption):
     try:
-        print("🚀 STEP 5: UPLOADING PDF", flush=True)
+        print("🚀 UPLOADING PDF", flush=True)
 
         upload_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/media"
-        headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+        headers = {
+            "Authorization": f"Bearer {ACCESS_TOKEN}"
+        }
 
-        files = {"file": open(pdf_path, "rb")}
+        # ✅ FIX: filename + content-type added
+        files = {
+            "file": (
+                "order.pdf",
+                open(pdf_path, "rb"),
+                "application/pdf"
+            )
+        }
+
         data = {
             "messaging_product": "whatsapp",
             "type": "application/pdf"
@@ -96,7 +108,7 @@ def send_pdf_on_whatsapp(pdf_path, caption):
             print("❌ MEDIA ID NOT RECEIVED – STOPPING", flush=True)
             return
 
-        print("✅ MEDIA ID:", media_id, flush=True)
+        print("✅ MEDIA ID RECEIVED:", media_id, flush=True)
 
         message_url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 
