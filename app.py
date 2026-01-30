@@ -78,25 +78,21 @@ def send_pdf_on_whatsapp(pdf_path, caption):
             "Authorization": f"Bearer {ACCESS_TOKEN}"
         }
 
-        # ✅ FIX: filename + content-type added
+        # ✅ FINAL FIX — everything as multipart
         files = {
             "file": (
                 "order.pdf",
                 open(pdf_path, "rb"),
                 "application/pdf"
-            )
-        }
-
-        data = {
-            "messaging_product": "whatsapp",
-            "type": "application/pdf"
+            ),
+            "messaging_product": (None, "whatsapp"),
+            "type": (None, "application/pdf")
         }
 
         upload_response = requests.post(
             upload_url,
             headers=headers,
-            files=files,
-            data=data
+            files=files
         )
 
         print("MEDIA UPLOAD RESPONSE:", upload_response.text, flush=True)
